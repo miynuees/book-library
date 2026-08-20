@@ -98,6 +98,8 @@
   .result-info .t{font-weight:700;font-size:14px;line-height:1.35;}
   .result-info .m{font-size:12px;color:var(--muted);margin-top:2px;}
   .search-status{font-size:13px;color:var(--muted);padding:6px 2px;}
+  .provider-note{font-size:11px;color:var(--lilac-dark);background:#F5F0FA;display:inline-block;padding:5px 12px;border-radius:99px;margin-top:8px;}
+  .provider-note.kakao{color:#B8860B;background:#FFF6E0;}
 
   .tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
   .tab{
@@ -203,6 +205,7 @@
     </div>
     <div id="searchStatus" class="search-status" hidden></div>
     <div id="searchResults" class="search-results"></div>
+    <div id="providerNote" class="provider-note" hidden></div>
   </div>
 
   <div class="tabs" id="tabs"></div>
@@ -290,6 +293,20 @@ const searchResults = document.getElementById('searchResults');
 searchBtn.onclick = doSearch;
 searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 
+const providerNote = document.getElementById('providerNote');
+function showProviderNote(provider){
+  if (provider === 'kakao') {
+    providerNote.textContent = '🟡 지금은 카카오 검색 임시 연결 중 — 쪽수는 직접 입력해줘. 알라딘 키가 등록되면 자동 전환돼.';
+    providerNote.className = 'provider-note kakao';
+  } else if (provider === 'aladin') {
+    providerNote.textContent = '🟣 알라딘 검색 연결됨 — 쪽수까지 자동으로 채워져.';
+    providerNote.className = 'provider-note';
+  } else {
+    return;
+  }
+  providerNote.hidden = false;
+}
+
 async function doSearch(){
   const q = searchInput.value.trim();
   if (!q) return;
@@ -301,6 +318,7 @@ async function doSearch(){
     const r = await fetch(`${PROXY}/api/book-search?action=search&query=${encodeURIComponent(q)}`);
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || '검색 실패');
+    showProviderNote(data.provider);
     if (!data.items || !data.items.length) {
       searchStatus.textContent = '검색 결과가 없어요. 직접 추가를 이용해보세요.';
       return;
