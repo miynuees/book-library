@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
   :root{
     --cream:#FBF6EE;
@@ -16,6 +16,8 @@
     --lilac-dark:#8E6FBE;
     --peach:#FFC9A8;
     --peach-dark:#FF9459;
+    --bg-a:#FBF6EE;
+    --bg-b:#F6EEFA;
     --ink:#4A3F55;
     --muted:#9B8FA8;
     --line:#EEE3F0;
@@ -23,15 +25,28 @@
     --green-dark:#5E9E63;
     --shadow:0 6px 20px rgba(142,111,190,0.12);
   }
+  :root[data-theme="pink"]{
+    --lilac:#F5A8C7; --lilac-dark:#E0699E; --peach:#9ED4F0; --peach-dark:#4FA8D8;
+    --bg-a:#FFF3F7; --bg-b:#EFF8FC;
+  }
+  :root[data-theme="mint"]{
+    --lilac:#8FD6B5; --lilac-dark:#3E9E76; --peach:#FFD08A; --peach-dark:#F0A93E;
+    --bg-a:#F0FBF5; --bg-b:#FFF8EC;
+  }
+  :root[data-theme="mono"]{
+    --lilac:#B7AFC2; --lilac-dark:#726A80; --peach:#D8CBB0; --peach-dark:#A98F5E;
+    --bg-a:#F7F5F2; --bg-b:#F0ECE6;
+  }
   *{box-sizing:border-box;}
   body{margin:0;}
   html,body{
-    background:linear-gradient(160deg,#FBF6EE 0%,#F6EEFA 100%);
+    background:linear-gradient(160deg,var(--bg-a) 0%,var(--bg-b) 100%);
     color:var(--ink);
     font-family:'Noto Sans KR',sans-serif;
     min-height:100vh;
+    transition:background .25s;
   }
-  h1,h2,h3,.serif{font-family:'Gowun Batang',serif;}
+  h1,h2,h3,.serif{font-family:'Gowun Dodum','Noto Sans KR',sans-serif;}
   [hidden]{display:none!important;}
   button{font-family:inherit;cursor:pointer;border:none;}
   input,textarea,select{font-family:inherit;}
@@ -68,6 +83,11 @@
     background:#fff;padding:6px 12px;border-radius:99px;box-shadow:var(--shadow);
   }
   .code-pill button{background:none;color:var(--lilac-dark);font-size:12px;font-weight:700;text-decoration:underline;padding:0;}
+
+  .theme-picker{display:flex;gap:7px;margin-top:9px;align-items:center;}
+  .theme-swatch{width:22px;height:22px;border-radius:50%;padding:0;border:2px solid #fff;box-shadow:0 0 0 1px var(--line),var(--shadow);transition:transform .15s;}
+  .theme-swatch:hover{transform:scale(1.12);}
+  .theme-swatch.active{box-shadow:0 0 0 2px var(--ink),var(--shadow);}
 
   .stats{display:flex;gap:10px;flex-wrap:wrap;}
   .stat{
@@ -181,7 +201,7 @@
   <div class="gate-card">
     <div class="icon">📚</div>
     <h1 class="serif">내 서재</h1>
-    <p>서재 코드를 입력하면 그 코드로 내 책장이 저장돼.<br>다른 기기에서도 같은 코드를 입력하면 같은 책장이 보여.</p>
+    <p>서재 코드를 입력하면 그 코드로 책장이 저장돼요.<br>다른 기기에서도 같은 코드를 입력하면 같은 책장을 볼 수 있어요.</p>
     <input type="text" id="codeInput" placeholder="예: seeun2026" autocomplete="off">
     <button class="btn btn-lilac" id="enterBtn" style="width:100%;box-shadow:none;">서재 열기</button>
     <div class="gate-hint">처음이라면 아무 단어나 정해서 입력하면 새 서재가 만들어져요.<br>기억해두면 다음에 같은 코드로 이어서 쓸 수 있어요.</div>
@@ -193,6 +213,7 @@
     <div>
       <h1 class="serif">📚 내 서재</h1>
       <div class="code-pill">코드: <b id="codeLabel"></b> · <button id="switchCodeBtn">다른 서재</button></div>
+      <div class="theme-picker" id="themePicker"></div>
     </div>
     <div class="stats" id="stats"></div>
   </header>
@@ -248,6 +269,29 @@ function esc(s){
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+// ---------- 테마 ----------
+const THEMES = [
+  { key: 'lilac', label: '라일락', c1: '#C9B6E4', c2: '#FF9459' },
+  { key: 'pink', label: '핑크', c1: '#F5A8C7', c2: '#4FA8D8' },
+  { key: 'mint', label: '민트', c1: '#8FD6B5', c2: '#F0A93E' },
+  { key: 'mono', label: '모노톤', c1: '#B7AFC2', c2: '#A98F5E' },
+];
+function applyTheme(key){
+  document.documentElement.setAttribute('data-theme', key === 'lilac' ? '' : key);
+  localStorage.setItem('seni_library_theme', key);
+}
+function renderThemePicker(){
+  const picker = document.getElementById('themePicker');
+  const current = localStorage.getItem('seni_library_theme') || 'lilac';
+  picker.innerHTML = THEMES.map(t => `
+    <button class="theme-swatch ${current === t.key ? 'active' : ''}" data-theme="${t.key}" title="${t.label}" style="background:linear-gradient(135deg,${t.c1},${t.c2});"></button>
+  `).join('');
+  picker.querySelectorAll('.theme-swatch').forEach(b => {
+    b.onclick = () => { applyTheme(b.dataset.theme); renderThemePicker(); };
+  });
+}
+applyTheme(localStorage.getItem('seni_library_theme') || 'lilac');
+
 // ---------- 게이트 ----------
 document.getElementById('enterBtn').onclick = () => {
   const v = document.getElementById('codeInput').value.trim();
@@ -275,6 +319,7 @@ function openLibrary(){
   document.getElementById('gate').hidden = true;
   document.getElementById('app').hidden = false;
   document.getElementById('codeLabel').textContent = libraryCode;
+  renderThemePicker();
   booksRef = db.collection('book_library').doc(libraryCode).collection('books');
   if (unsub) unsub();
   unsub = booksRef.orderBy('addedAt', 'desc').onSnapshot(snap => {
@@ -304,10 +349,10 @@ closeResultsBtn.onclick = () => {
 const providerNote = document.getElementById('providerNote');
 function showProviderNote(provider){
   if (provider === 'kakao') {
-    providerNote.textContent = '🟡 지금은 카카오 검색 임시 연결 중 — 쪽수는 직접 입력해줘. 알라딘 키가 등록되면 자동 전환돼.';
+    providerNote.textContent = '🟡 지금은 카카오 검색으로 임시 연결되어 있어요 — 쪽수는 직접 입력해주세요. 알라딘 키가 등록되면 자동으로 전환돼요.';
     providerNote.className = 'provider-note kakao';
   } else if (provider === 'aladin') {
-    providerNote.textContent = '🟣 알라딘 검색 연결됨 — 쪽수까지 자동으로 채워져.';
+    providerNote.textContent = '🟣 알라딘 검색이 연결되어 있어요 — 쪽수까지 자동으로 채워져요.';
     providerNote.className = 'provider-note';
   } else {
     return;
