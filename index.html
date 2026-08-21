@@ -226,6 +226,11 @@
   .modal-close button{background:none;color:var(--muted);font-size:22px;padding:4px 8px;}
   .del-link{display:block;text-align:center;margin-top:14px;font-size:12px;color:#C97A7A;text-decoration:underline;background:none;}
 
+  /* ---------- 바코드 스캐너 ---------- */
+  #qr-reader{width:100%;border-radius:14px;overflow:hidden;background:#111;}
+  #qr-reader video{border-radius:14px;}
+  .scanner-hint{font-size:12px;color:var(--muted);margin:10px 0 0;text-align:center;line-height:1.6;}
+
   /* ---------- 모바일: 전체적으로 볼륨 축소 ---------- */
   @media (max-width:600px){
     #app{padding:16px 12px 60px;}
@@ -290,6 +295,7 @@
     <div class="search-row">
       <input type="text" id="searchInput" placeholder="추가할 책 제목이나 저자로 검색">
       <button class="btn btn-peach" id="searchBtn">검색</button>
+      <button class="btn btn-outline" id="scanBtn">📷 바코드로 추가</button>
       <button class="btn btn-outline" id="manualAddBtn">직접 추가</button>
     </div>
     <div id="searchStatus" class="search-status" hidden></div>
@@ -312,8 +318,19 @@
 
 <div class="overlay" id="detailOverlay" hidden></div>
 
+<div class="overlay" id="scannerOverlay" hidden>
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-close"><button id="scannerCloseBtn">✕</button></div>
+    <h3 class="serif" style="margin:0 0 4px;">📷 바코드로 추가</h3>
+    <div id="qr-reader"></div>
+    <div id="scannerStatus" class="scanner-hint">책 뒷면 바코드를 카메라에 비춰주세요.</div>
+    <button class="btn btn-outline" id="scannerRetryBtn" hidden style="width:100%;margin-top:10px;">🔄 다시 스캔</button>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 const PROXY = 'https://prompt-atelier-proxy.vercel.app';
 
@@ -537,6 +554,19 @@ async function doSearch(){
   }
 }
 
+async function addBookRecord(b){
+  const kdc = classifyKdc(b.categoryName || '');
+  await booksRef.add({
+    title: b.title || '제목 없음', author: b.author || '', publisher: b.publisher || '', pubDate: b.pubDate || '',
+    isbn13: b.isbn13 || '', cover: b.cover || '', pageCount: b.pageCount || null,
+    kdcCode: kdc ? kdc.code : null, kdcLabel: kdc ? kdc.label : '',
+    status: 'unread', currentPage: 0, rating: null, memo: '',
+    addedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    finishedAt: null
+  });
+}
+
 async function addFromSearch(item, btn){
   btn.disabled = true;
   btn.textContent = '담는 중';
@@ -554,17 +584,84 @@ async function addFromSearch(item, btn){
       }
     } catch (e) { /* 상세 조회 실패해도 검색 결과 정보로 계속 진행 */ }
   }
-  const kdc = classifyKdc(categoryName);
-  await booksRef.add({
-    title: item.title, author: item.author, publisher: item.publisher, pubDate: item.pubDate || '',
-    isbn13: item.isbn13 || '', cover, pageCount: pageCount || null,
-    kdcCode: kdc ? kdc.code : null, kdcLabel: kdc ? kdc.label : '',
-    status: 'unread', currentPage: 0, rating: null, memo: '',
-    addedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    finishedAt: null
-  });
+  await addBookRecord({ title: item.title, author: item.author, publisher: item.publisher, pubDate: item.pubDate, isbn13: item.isbn13, cover, pageCount, categoryName });
   btn.textContent = '담김 ✓';
+}
+
+// ---------- 바코드 스캔으로 추가 ----------
+const scannerOverlay = document.getElementById('scannerOverlay');
+const scannerStatus = document.getElementById('scannerStatus');
+const scannerRetryBtn = document.getElementById('scannerRetryBtn');
+let html5QrCode = null;
+let scanning = false;
+
+function stopCamera(){
+  if (!html5QrCode) return Promise.resolve();
+  const inst = html5QrCode;
+  html5QrCode = null;
+  return inst.stop().then(() => inst.clear()).catch(() => {});
+}
+
+function showRetryButton(){ scannerRetryBtn.hidden = false; }
+
+async function startCamera(){
+  scannerStatus.textContent = '책 뒷면 바코드를 카메라에 비춰주세요.';
+  scannerRetryBtn.hidden = true;
+  try {
+    html5QrCode = new Html5Qrcode('qr-reader', { formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13] });
+    scanning = true;
+    await html5QrCode.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 150 } },
+      (decodedText) => {
+        if (!scanning) return;
+        scanning = false;
+        stopCamera().then(() => handleScannedIsbn(decodedText));
+      },
+      () => { /* 프레임마다 실패하는 건 정상 — 무시 */ }
+    );
+  } catch (err) {
+    scanning = false;
+    scannerStatus.textContent = '카메라를 열 수 없어요. 브라우저의 카메라 권한을 확인해주세요.';
+    showRetryButton();
+  }
+}
+
+function openScanner(){
+  scannerOverlay.hidden = false;
+  startCamera();
+}
+
+async function closeScanner(){
+  scanning = false;
+  await stopCamera();
+  scannerOverlay.hidden = true;
+}
+
+document.getElementById('scanBtn').onclick = openScanner;
+document.getElementById('scannerCloseBtn').onclick = () => closeScanner();
+scannerOverlay.addEventListener('click', e => { if (e.target === scannerOverlay) closeScanner(); });
+scannerRetryBtn.onclick = () => startCamera();
+
+async function handleScannedIsbn(isbn){
+  scannerStatus.textContent = `바코드 인식: ${isbn} — 책 정보를 불러오는 중...`;
+  try {
+    const r = await fetch(`${PROXY}/api/book-search?action=lookup&isbn=${encodeURIComponent(isbn)}`);
+    const data = await r.json();
+    if (!r.ok || !data.items || !data.items[0]) {
+      scannerStatus.textContent = '이 바코드로 책 정보를 찾지 못했어요.';
+      showRetryButton();
+      return;
+    }
+    const item = data.items[0];
+    showProviderNote(data.provider);
+    await addBookRecord(item);
+    scannerStatus.textContent = `✅ "${item.title}" 서재에 담았어요!`;
+    setTimeout(closeScanner, 1200);
+  } catch (err) {
+    scannerStatus.textContent = '책 정보를 불러오는 중 오류가 났어요.';
+    showRetryButton();
+  }
 }
 
 // ---------- 직접 추가 ----------
