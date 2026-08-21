@@ -105,6 +105,7 @@
   .btn-lilac{background:linear-gradient(135deg,var(--lilac),var(--lilac-dark));box-shadow:0 5px 14px rgba(142,111,190,.3);}
   .btn-ghost{background:#F5F0F8;color:var(--ink);box-shadow:none;}
   .btn-outline{background:#fff;color:var(--lilac-dark);border:2px solid var(--lilac);box-shadow:none;}
+  .search-row .btn-outline{padding-top:7px;padding-bottom:7px;}
   .btn:disabled{opacity:.5;cursor:default;}
   .link-btn{background:none;color:var(--muted);font-size:12px;text-decoration:underline;padding:2px 2px;}
   .link-btn:hover{color:var(--lilac-dark);}
@@ -129,10 +130,16 @@
   }
   .tab.active{background:linear-gradient(135deg,var(--lilac),var(--lilac-dark));color:#fff;}
 
+  .filter-wrap{position:relative;flex:1 1 100px;min-width:90px;display:flex;align-items:center;}
   .filter-input{
-    flex:1 1 100px;min-width:90px;padding:8px 14px;border-radius:99px;border:2px solid var(--line);font-size:12px;outline:none;background:#fff;
+    width:100%;padding:8px 26px 8px 14px;border-radius:99px;border:2px solid var(--line);font-size:12px;outline:none;background:#fff;
   }
   .filter-input:focus{border-color:var(--lilac);}
+  .filter-clear{
+    position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    background:none;color:var(--muted);font-size:10px;padding:3px 5px;line-height:1;border-radius:50%;
+  }
+  .filter-clear:hover{color:var(--lilac-dark);background:var(--cream);}
 
   .view-toggle{display:flex;gap:6px;flex-wrap:wrap;}
   .view-toggle button{padding:7px 11px;border-radius:12px;background:#fff;color:var(--muted);font-size:11px;font-weight:700;box-shadow:var(--shadow);white-space:nowrap;}
@@ -243,10 +250,12 @@
     .panel{padding:14px;border-radius:16px;}
     .search-row input[type=text]{padding:9px 12px;font-size:13px;border-radius:11px;}
     .btn{padding:9px 13px;font-size:12px;border-radius:11px;}
+    .search-row .btn-outline{padding-top:6px;padding-bottom:6px;}
     .gate-card{padding:30px 22px;border-radius:20px;}
     .gate-card button{padding:11px;border-radius:13px;font-size:14px;}
     .tab{padding:6px 11px;font-size:11px;}
-    .filter-input{padding:6px 11px;font-size:11px;min-width:60px;}
+    .filter-wrap{min-width:60px;}
+    .filter-input{padding:6px 22px 6px 11px;font-size:11px;}
     .view-toggle button{padding:6px 8px;font-size:10px;border-radius:9px;}
     .grid{grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:9px;}
     .card{border-radius:12px;}
@@ -305,7 +314,10 @@
 
   <div class="control-row">
     <div class="tabs" id="tabs"></div>
-    <input type="text" id="filterInput" class="filter-input" placeholder="찾기">
+    <div class="filter-wrap">
+      <input type="text" id="filterInput" class="filter-input" placeholder="찾기">
+      <button id="filterClearBtn" class="filter-clear" hidden>✕</button>
+    </div>
     <div class="view-toggle" id="viewToggle"></div>
   </div>
 
@@ -503,13 +515,10 @@ function showProviderNote(provider){
   if (provider === 'kakao') {
     providerNote.textContent = '🟡 지금은 카카오 검색으로 임시 연결되어 있어요 — 쪽수는 직접 입력해주세요. 알라딘 키가 등록되면 자동으로 전환돼요.';
     providerNote.className = 'provider-note kakao';
-  } else if (provider === 'aladin') {
-    providerNote.textContent = '🟣 알라딘 검색이 연결되어 있어요 — 쪽수까지 자동으로 채워져요.';
-    providerNote.className = 'provider-note';
+    providerNote.hidden = false;
   } else {
-    return;
+    providerNote.hidden = true;
   }
-  providerNote.hidden = false;
 }
 
 async function doSearch(){
@@ -676,10 +685,20 @@ const TABS = [
   { key: 'reading', label: '읽는 중' },
   { key: 'done', label: '다읽음' },
 ];
-document.getElementById('filterInput').addEventListener('input', e => {
+const filterInputEl = document.getElementById('filterInput');
+const filterClearBtn = document.getElementById('filterClearBtn');
+filterInputEl.addEventListener('input', e => {
   filterText = e.target.value.trim().toLowerCase();
+  filterClearBtn.hidden = !e.target.value;
   render();
 });
+filterClearBtn.onclick = () => {
+  filterInputEl.value = '';
+  filterText = '';
+  filterClearBtn.hidden = true;
+  render();
+  filterInputEl.focus();
+};
 
 function render(){
   const counts = { all: books.length, unread: 0, reading: 0, done: 0 };
