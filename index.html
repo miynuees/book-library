@@ -149,8 +149,12 @@
     display:grid;grid-template-columns:minmax(0,1fr) 58px 54px 50px 30px;
     align-items:center;column-gap:6px;padding:10px 12px;
   }
-  .kdc-section-title{font-size:13px;font-weight:700;color:var(--lilac-dark);margin:18px 2px 8px;}
+  .kdc-section-title{
+    font-size:13px;font-weight:700;color:var(--lilac-dark);margin:18px 2px 8px;
+    cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none;
+  }
   .kdc-section-title:first-child{margin-top:0;}
+  .kdc-caret{font-size:10px;display:inline-block;width:10px;}
   .grid.list .card-body .title{
     grid-column:1;display:block;-webkit-line-clamp:unset;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
   }
@@ -375,6 +379,14 @@ function renderViewToggle(){
       render();
     };
   });
+}
+
+// ---------- 분류별 보기: 섹션 접기/펼치기 ----------
+let collapsedCategories = new Set(JSON.parse(localStorage.getItem('seni_library_collapsed') || '[]'));
+function toggleCategory(key){
+  if (collapsedCategories.has(key)) collapsedCategories.delete(key); else collapsedCategories.add(key);
+  localStorage.setItem('seni_library_collapsed', JSON.stringify([...collapsedCategories]));
+  render();
 }
 
 // ---------- 한국십진분류(KDC) 자동 태깅 ----------
@@ -605,10 +617,19 @@ function render(){
     if (viewMode === 'category') {
       const groups = KDC_CLASSES.map(c => ({ code: c.code, label: c.label, items: list.filter(b => b.kdcCode === c.code) }));
       groups.push({ code: null, label: '미분류', items: list.filter(b => !b.kdcCode) });
-      grid.innerHTML = groups.filter(g => g.items.length).map(g => `
-        <div class="kdc-section-title">${g.code ? g.code + ' ' : ''}${g.label} (${g.items.length})</div>
-        ${g.items.map(b => cardHtml(b, { hideKdc: true })).join('')}
-      `).join('');
+      grid.innerHTML = groups.filter(g => g.items.length).map(g => {
+        const key = g.code || 'none';
+        const collapsed = collapsedCategories.has(key);
+        return `
+        <div class="kdc-section-title" data-key="${key}">
+          <span class="kdc-caret">${collapsed ? '▶' : '▼'}</span>${g.code ? g.code + ' ' : ''}${g.label} (${g.items.length})
+        </div>
+        ${collapsed ? '' : g.items.map(b => cardHtml(b, { hideKdc: true })).join('')}
+      `;
+      }).join('');
+      grid.querySelectorAll('.kdc-section-title').forEach(el => {
+        el.onclick = () => toggleCategory(el.dataset.key);
+      });
     } else {
       grid.innerHTML = list.map(b => cardHtml(b)).join('');
     }
