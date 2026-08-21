@@ -33,9 +33,9 @@
     --lilac:#8FD6B5; --lilac-dark:#3E9E76; --peach:#FFD08A; --peach-dark:#F0A93E;
     --bg-a:#F0FBF5; --bg-b:#FFF8EC;
   }
-  :root[data-theme="mono"]{
-    --lilac:#B7AFC2; --lilac-dark:#726A80; --peach:#D8CBB0; --peach-dark:#A98F5E;
-    --bg-a:#F7F5F2; --bg-b:#F0ECE6;
+  :root[data-theme="navy"]{
+    --lilac:#7B88D9; --lilac-dark:#4A56A8; --peach:#F4C463; --peach-dark:#D99A2B;
+    --bg-a:#F1F3FC; --bg-b:#FFF8EA;
   }
   *{box-sizing:border-box;}
   body{margin:0;}
@@ -84,10 +84,10 @@
   }
   .code-pill button{background:none;color:var(--lilac-dark);font-size:12px;font-weight:700;text-decoration:underline;padding:0;}
 
-  .theme-picker{display:flex;gap:7px;margin-top:9px;align-items:center;}
-  .theme-swatch{width:22px;height:22px;border-radius:50%;padding:0;border:2px solid #fff;box-shadow:0 0 0 1px var(--line),var(--shadow);transition:transform .15s;}
-  .theme-swatch:hover{transform:scale(1.12);}
-  .theme-swatch.active{box-shadow:0 0 0 2px var(--ink),var(--shadow);}
+  .theme-picker{display:flex;gap:5px;align-items:center;}
+  .theme-swatch{width:14px;height:14px;border-radius:50%;padding:0;border:1.5px solid #fff;box-shadow:0 0 0 1px var(--line);transition:transform .15s;}
+  .theme-swatch:hover{transform:scale(1.2);}
+  .theme-swatch.active{box-shadow:0 0 0 1.5px var(--ink);}
 
   .stats{display:flex;gap:10px;flex-wrap:wrap;}
   .stat{
@@ -108,6 +108,8 @@
   .btn-ghost{background:#F5F0F8;color:var(--ink);box-shadow:none;}
   .btn-outline{background:#fff;color:var(--lilac-dark);border:2px solid var(--lilac);box-shadow:none;}
   .btn:disabled{opacity:.5;cursor:default;}
+  .link-btn{background:none;color:var(--muted);font-size:12px;text-decoration:underline;padding:2px 2px;}
+  .link-btn:hover{color:var(--lilac-dark);}
 
   .search-results{margin-top:14px;display:flex;flex-direction:column;gap:10px;}
   .result-card{
@@ -127,6 +129,12 @@
     box-shadow:var(--shadow);
   }
   .tab.active{background:linear-gradient(135deg,var(--lilac),var(--lilac-dark));color:#fff;}
+
+  .filter-input{
+    width:110px;padding:9px 14px;border-radius:99px;border:2px solid var(--line);font-size:12px;outline:none;background:#fff;
+    transition:width .2s;
+  }
+  .filter-input:focus{border-color:var(--lilac);width:150px;}
 
   .view-toggle{display:flex;gap:6px;}
   .view-toggle button{padding:8px 12px;border-radius:12px;background:#fff;color:var(--muted);font-size:12px;font-weight:700;box-shadow:var(--shadow);}
@@ -228,14 +236,18 @@
   <header class="top">
     <div>
       <h1 class="serif">📚 내 서재</h1>
-      <div class="code-pill">코드: <b id="codeLabel"></b> · <button id="switchCodeBtn">다른 서재</button></div>
-      <div class="theme-picker" id="themePicker"></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div class="code-pill">코드: <b id="codeLabel"></b> · <button id="switchCodeBtn">다른 서재</button></div>
+        <div class="theme-picker" id="themePicker"></div>
+      </div>
     </div>
     <div class="stats" id="stats"></div>
   </header>
 
   <div class="panel">
-    <button class="btn btn-ghost" id="closeResultsBtn" hidden style="margin-bottom:10px;padding:8px 16px;font-size:12px;">✕ 검색 결과 닫기</button>
+    <div style="text-align:right;">
+      <button class="link-btn" id="closeResultsBtn" hidden>✕ 검색 결과 닫기</button>
+    </div>
     <div class="search-row">
       <input type="text" id="searchInput" placeholder="추가할 책 제목이나 저자로 검색">
       <button class="btn btn-peach" id="searchBtn">검색</button>
@@ -247,10 +259,12 @@
   </div>
 
   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
-    <div class="tabs" id="tabs" style="margin-bottom:0;"></div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div class="tabs" id="tabs" style="margin-bottom:0;"></div>
+      <input type="text" id="filterInput" class="filter-input" placeholder="찾기">
+    </div>
     <div class="view-toggle" id="viewToggle"></div>
   </div>
-  <input type="text" id="filterInput" placeholder="내 서재에서 찾기" style="width:100%;padding:11px 15px;border-radius:14px;border:2px solid var(--line);font-size:14px;outline:none;margin-bottom:16px;">
 
   <div class="grid" id="grid"></div>
   <div class="empty" id="emptyState" hidden>
@@ -293,7 +307,7 @@ const THEMES = [
   { key: 'lilac', label: '라일락', c1: '#C9B6E4', c2: '#FF9459' },
   { key: 'pink', label: '핑크', c1: '#F5A8C7', c2: '#4FA8D8' },
   { key: 'mint', label: '민트', c1: '#8FD6B5', c2: '#F0A93E' },
-  { key: 'mono', label: '모노톤', c1: '#B7AFC2', c2: '#A98F5E' },
+  { key: 'navy', label: '네이비', c1: '#7B88D9', c2: '#E0A030' },
 ];
 function applyTheme(key){
   document.documentElement.setAttribute('data-theme', key === 'lilac' ? '' : key);
