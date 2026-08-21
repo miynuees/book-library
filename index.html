@@ -164,7 +164,7 @@
   }
   .card:hover{transform:translateY(-3px);}
   .cover{
-    width:100%;aspect-ratio:3/4.2;background:linear-gradient(160deg,#F3ECFA,#FDEFE4);
+    width:100%;aspect-ratio:3/3.3;background:linear-gradient(160deg,#F3ECFA,#FDEFE4);
     display:flex;align-items:center;justify-content:center;overflow:hidden;
   }
   .cover img{width:100%;height:100%;object-fit:cover;}
@@ -607,10 +607,10 @@ function render(){
       groups.push({ code: null, label: '미분류', items: list.filter(b => !b.kdcCode) });
       grid.innerHTML = groups.filter(g => g.items.length).map(g => `
         <div class="kdc-section-title">${g.code ? g.code + ' ' : ''}${g.label} (${g.items.length})</div>
-        ${g.items.map(b => cardHtml(b, { hideKdc: true, hideStars: true })).join('')}
+        ${g.items.map(b => cardHtml(b, { hideKdc: true })).join('')}
       `).join('');
     } else {
-      grid.innerHTML = list.map(b => cardHtml(b, { hideStars: viewMode === 'list' })).join('');
+      grid.innerHTML = list.map(b => cardHtml(b)).join('');
     }
     grid.querySelectorAll('.card').forEach(el => {
       el.onclick = () => openDetail(books.find(b => b.id === el.dataset.id));
@@ -630,7 +630,7 @@ function cardHtml(b, opts){
     <div class="card-body">
       <div class="title">${esc(b.title)}</div>
       <div class="author">${esc(b.author)}</div>
-      <span class="badge ${b.status}">${badgeText}${(!opts.hideStars && b.status==='done' && b.rating) ? ' ' + '★'.repeat(b.rating) : ''}</span>
+      <span class="badge ${b.status}">${badgeText}</span>
       ${(!opts.hideKdc && b.kdcLabel) ? `<span class="kdc-tag">${esc(b.kdcCode)} ${esc(b.kdcLabel)}</span>` : ''}
       ${pct !== null ? `<div class="mini-progress"><i style="width:${pct}%"></i></div>` : ''}
     </div>
