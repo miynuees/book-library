@@ -205,6 +205,7 @@
     </div>
     <div id="searchStatus" class="search-status" hidden></div>
     <div id="searchResults" class="search-results"></div>
+    <button class="btn btn-ghost" id="closeResultsBtn" hidden style="margin-top:10px;padding:8px 16px;font-size:12px;">✕ 검색 결과 닫기</button>
     <div id="providerNote" class="provider-note" hidden></div>
   </div>
 
@@ -293,6 +294,13 @@ const searchResults = document.getElementById('searchResults');
 searchBtn.onclick = doSearch;
 searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 
+const closeResultsBtn = document.getElementById('closeResultsBtn');
+closeResultsBtn.onclick = () => {
+  searchResults.innerHTML = '';
+  searchStatus.hidden = true;
+  closeResultsBtn.hidden = true;
+};
+
 const providerNote = document.getElementById('providerNote');
 function showProviderNote(provider){
   if (provider === 'kakao') {
@@ -313,6 +321,7 @@ async function doSearch(){
   searchResults.innerHTML = '';
   searchStatus.hidden = false;
   searchStatus.textContent = '검색하는 중...';
+  closeResultsBtn.hidden = true;
   searchBtn.disabled = true;
   try {
     const r = await fetch(`${PROXY}/api/book-search?action=search&query=${encodeURIComponent(q)}`);
@@ -321,9 +330,11 @@ async function doSearch(){
     showProviderNote(data.provider);
     if (!data.items || !data.items.length) {
       searchStatus.textContent = '검색 결과가 없어요. 직접 추가를 이용해보세요.';
+      closeResultsBtn.hidden = false;
       return;
     }
     searchStatus.hidden = true;
+    closeResultsBtn.hidden = false;
     searchResults.innerHTML = data.items.map((it, i) => `
       <div class="result-card">
         <img src="${esc(it.cover)}" onerror="this.style.visibility='hidden'">
@@ -340,6 +351,7 @@ async function doSearch(){
   } catch (err) {
     searchStatus.hidden = false;
     searchStatus.textContent = '검색에 실패했어요: ' + err.message;
+    closeResultsBtn.hidden = false;
   } finally {
     searchBtn.disabled = false;
   }
