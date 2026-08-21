@@ -128,9 +128,22 @@
   }
   .tab.active{background:linear-gradient(135deg,var(--lilac),var(--lilac-dark));color:#fff;}
 
+  .view-toggle{display:flex;gap:6px;}
+  .view-toggle button{padding:8px 12px;border-radius:12px;background:#fff;color:var(--muted);font-size:12px;font-weight:700;box-shadow:var(--shadow);}
+  .view-toggle button.active{background:linear-gradient(135deg,var(--lilac),var(--lilac-dark));color:#fff;}
+
   .grid{
     display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;
   }
+  .grid.list{display:flex;flex-direction:column;gap:10px;}
+  .grid.list .card{flex-direction:row;align-items:center;}
+  .grid.list .card:hover{transform:none;}
+  .grid.list .cover{width:46px;height:64px;aspect-ratio:unset;flex-shrink:0;}
+  .grid.list .card-body{flex-direction:row;align-items:center;gap:12px;padding:8px 14px;flex-wrap:wrap;}
+  .grid.list .card-body .title{-webkit-line-clamp:1;flex:1 1 160px;min-width:0;}
+  .grid.list .card-body .author{flex:0 1 140px;white-space:nowrap;}
+  .grid.list .badge,.grid.list .kdc-tag{margin-top:0;}
+  .grid.list .mini-progress{width:70px;flex-shrink:0;margin-top:0;}
   .card{
     background:#fff;border-radius:18px;box-shadow:var(--shadow);overflow:hidden;cursor:pointer;
     transition:transform .15s;display:flex;flex-direction:column;
@@ -150,6 +163,7 @@
   .badge.unread{background:#F0EBE0;color:#8A7F6B;}
   .badge.reading{background:linear-gradient(135deg,var(--peach),var(--peach-dark));color:#fff;}
   .badge.done{background:linear-gradient(135deg,var(--lilac),var(--lilac-dark));color:#fff;}
+  .kdc-tag{align-self:flex-start;font-size:10px;color:var(--muted);background:var(--cream);padding:2px 8px;border-radius:99px;margin-top:2px;}
   .mini-progress{height:5px;border-radius:99px;background:#F0E9E2;overflow:hidden;margin-top:2px;}
   .mini-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--peach),var(--peach-dark));}
 
@@ -172,10 +186,10 @@
   .modal-head .cover .ph{font-size:26px;}
   .field{margin-bottom:14px;}
   .field label{display:block;font-size:12px;color:var(--muted);font-weight:700;margin-bottom:5px;}
-  .field input[type=text],.field input[type=number],.field textarea{
-    width:100%;padding:10px 13px;border-radius:12px;border:2px solid var(--line);font-size:14px;outline:none;
+  .field input[type=text],.field input[type=number],.field textarea,.field select{
+    width:100%;padding:10px 13px;border-radius:12px;border:2px solid var(--line);font-size:14px;outline:none;background:#fff;
   }
-  .field input:focus,.field textarea:focus{border-color:var(--lilac);}
+  .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--lilac);}
   .field textarea{resize:vertical;min-height:60px;}
   .seg{display:flex;gap:6px;}
   .seg button{flex:1;padding:9px 4px;border-radius:12px;background:var(--cream);color:var(--muted);font-size:12px;font-weight:700;}
@@ -230,7 +244,10 @@
     <div id="providerNote" class="provider-note" hidden></div>
   </div>
 
-  <div class="tabs" id="tabs"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+    <div class="tabs" id="tabs" style="margin-bottom:0;"></div>
+    <div class="view-toggle" id="viewToggle"></div>
+  </div>
   <input type="text" id="filterInput" placeholder="내 서재에서 찾기" style="width:100%;padding:11px 15px;border-radius:14px;border:2px solid var(--line);font-size:14px;outline:none;margin-bottom:16px;">
 
   <div class="grid" id="grid"></div>
@@ -292,6 +309,61 @@ function renderThemePicker(){
 }
 applyTheme(localStorage.getItem('seni_library_theme') || 'lilac');
 
+// ---------- 보기 방식(그리드/리스트) ----------
+let viewMode = localStorage.getItem('seni_library_view') || 'grid';
+function renderViewToggle(){
+  const el = document.getElementById('viewToggle');
+  el.innerHTML = `
+    <button data-v="grid" class="${viewMode === 'grid' ? 'active' : ''}">🔳 그리드</button>
+    <button data-v="list" class="${viewMode === 'list' ? 'active' : ''}">☰ 리스트</button>
+  `;
+  el.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      viewMode = b.dataset.v;
+      localStorage.setItem('seni_library_view', viewMode);
+      renderViewToggle();
+      render();
+    };
+  });
+}
+
+// ---------- 한국십진분류(KDC) 자동 태깅 ----------
+// 알라딘 categoryName(예: "국내도서>소설/시/희곡>...")을 KDC 10개 대분류로 근사 매칭.
+// 국립중앙도서관 서지 데이터를 조회하는 게 아니라 알라딘 장르명 기반 추정이라 완벽하진 않음 — 상세창에서 수동 수정 가능.
+const KDC_CLASSES = [
+  { code: '000', label: '총류' },
+  { code: '100', label: '철학' },
+  { code: '200', label: '종교' },
+  { code: '300', label: '사회과학' },
+  { code: '400', label: '자연과학' },
+  { code: '500', label: '기술과학' },
+  { code: '600', label: '예술' },
+  { code: '700', label: '언어' },
+  { code: '800', label: '문학' },
+  { code: '900', label: '역사' },
+];
+const KDC_RULES = [
+  { code: '800', words: ['소설', '시/희곡', '시집', '에세이', '수필', '문학'] },
+  { code: '900', words: ['역사', '지리', '여행'] },
+  { code: '200', words: ['종교'] },
+  { code: '700', words: ['외국어', '언어학'] },
+  { code: '600', words: ['예술', '대중문화', '만화', '사진', '음악', '미술', '디자인', '공연'] },
+  { code: '500', words: ['컴퓨터', 'IT', '모바일', '공학', '건강', '의학', '요리', '원예', '육아', '반려동물', '가정관리'] },
+  { code: '400', words: ['자연과학', '수학', '물리', '화학', '생물', '천문', '환경'] },
+  { code: '100', words: ['철학', '심리학', '논리학', '윤리학', '인문학'] },
+  { code: '300', words: ['정치', '경제', '경영', '법', '사회과학', '교육학', '사회', '자기계발'] },
+  { code: '000', words: ['총류', '백과사전', '사전'] },
+];
+function classifyKdc(categoryName){
+  const s = categoryName || '';
+  for (const rule of KDC_RULES) {
+    if (rule.words.some(w => s.includes(w))) {
+      return KDC_CLASSES.find(c => c.code === rule.code) || null;
+    }
+  }
+  return null;
+}
+
 // ---------- 게이트 ----------
 document.getElementById('enterBtn').onclick = () => {
   const v = document.getElementById('codeInput').value.trim();
@@ -320,6 +392,7 @@ function openLibrary(){
   document.getElementById('app').hidden = false;
   document.getElementById('codeLabel').textContent = libraryCode;
   renderThemePicker();
+  renderViewToggle();
   booksRef = db.collection('book_library').doc(libraryCode).collection('books');
   if (unsub) unsub();
   unsub = booksRef.orderBy('addedAt', 'desc').onSnapshot(snap => {
@@ -407,6 +480,7 @@ async function addFromSearch(item, btn){
   btn.textContent = '담는 중';
   let pageCount = item.pageCount || null;
   let cover = item.cover || '';
+  let categoryName = item.categoryName || '';
   if (item.isbn13) {
     try {
       const r = await fetch(`${PROXY}/api/book-search?action=lookup&isbn=${encodeURIComponent(item.isbn13)}`);
@@ -414,12 +488,15 @@ async function addFromSearch(item, btn){
       if (data.items && data.items[0]) {
         pageCount = data.items[0].pageCount || pageCount;
         cover = data.items[0].cover || cover;
+        categoryName = data.items[0].categoryName || categoryName;
       }
     } catch (e) { /* 상세 조회 실패해도 검색 결과 정보로 계속 진행 */ }
   }
+  const kdc = classifyKdc(categoryName);
   await booksRef.add({
     title: item.title, author: item.author, publisher: item.publisher, pubDate: item.pubDate || '',
     isbn13: item.isbn13 || '', cover, pageCount: pageCount || null,
+    kdcCode: kdc ? kdc.code : null, kdcLabel: kdc ? kdc.label : '',
     status: 'unread', currentPage: 0, rating: null, memo: '',
     addedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -469,6 +546,7 @@ function render(){
 
   const grid = document.getElementById('grid');
   const empty = document.getElementById('emptyState');
+  grid.className = 'grid' + (viewMode === 'list' ? ' list' : '');
   if (!list.length) {
     grid.innerHTML = '';
     empty.hidden = false;
@@ -486,6 +564,7 @@ function render(){
           <div class="title">${esc(b.title)}</div>
           <div class="author">${esc(b.author)}</div>
           <span class="badge ${b.status}">${badgeText}${b.status==='done' && b.rating ? ' ' + '★'.repeat(b.rating) : ''}</span>
+          ${b.kdcLabel ? `<span class="kdc-tag">${esc(b.kdcCode)} ${esc(b.kdcLabel)}</span>` : ''}
           ${pct !== null ? `<div class="mini-progress"><i style="width:${pct}%"></i></div>` : ''}
         </div>
       </div>`;
@@ -503,7 +582,7 @@ let editState = null;
 function openDetail(book){
   editState = book ? { ...book } : {
     id: null, title: '', author: '', publisher: '', pageCount: null, cover: '',
-    status: 'unread', currentPage: 0, rating: null, memo: ''
+    kdcCode: null, kdcLabel: '', status: 'unread', currentPage: 0, rating: null, memo: ''
   };
   drawDetail();
   overlay.hidden = false;
@@ -530,6 +609,13 @@ function drawDetail(){
           <input type="text" id="f-publisher" value="${esc(b.publisher||'')}" placeholder="출판사" style="flex:1;">
           <input type="number" id="f-pageCount" value="${b.pageCount||''}" placeholder="쪽수" style="width:90px;">
         </div>
+      </div>
+      <div class="field">
+        <label>분류</label>
+        <select id="f-kdc">
+          <option value="">미분류</option>
+          ${KDC_CLASSES.map(c => `<option value="${c.code}" ${b.kdcCode===c.code?'selected':''}>${c.code} ${c.label}</option>`).join('')}
+        </select>
       </div>
       <div class="field">
         <label>읽음 상태</label>
@@ -592,11 +678,14 @@ function drawDetail(){
   };
 
   document.getElementById('saveBtn').onclick = async () => {
+    const kdcCode = document.getElementById('f-kdc').value || null;
+    const kdcMatch = KDC_CLASSES.find(c => c.code === kdcCode);
     const payload = {
       title: document.getElementById('f-title').value.trim() || '제목 없음',
       author: document.getElementById('f-author').value.trim(),
       publisher: document.getElementById('f-publisher').value.trim(),
       pageCount: document.getElementById('f-pageCount').value ? +document.getElementById('f-pageCount').value : null,
+      kdcCode, kdcLabel: kdcMatch ? kdcMatch.label : '',
       status: editState.status,
       currentPage: editState.status === 'reading' ? (+document.getElementById('f-currentPage').value || 0) : (editState.currentPage||0),
       rating: editState.status === 'done' ? (editState.rating || null) : null,
