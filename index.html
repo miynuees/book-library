@@ -554,7 +554,7 @@ settingsOverlay.addEventListener('click', e => { if (e.target === settingsOverla
 
 // 서재 이름(코드) 바꾸기 — 코드가 곧 저장 위치라서, 책 전체를 새 이름 아래로 복사한 뒤 원래 것을 지우는 방식.
 document.getElementById('renameCodeBtn').onclick = async () => {
-  const newCode = (prompt(`새 주인 이름을 입력해주세요.\n(지금: ${libraryCode})`) || '').trim();
+  const newCode = (prompt(`새 닉네임을 입력해주세요.\n(지금: ${libraryCode})`) || '').trim();
   if (!newCode || newCode === libraryCode) return;
   if (newCode.includes('/') || newCode === '.' || newCode === '..') { alert('이 이름은 쓸 수 없어요. 다른 이름으로 해주세요.'); return; }
   const renameBtn = document.getElementById('renameCodeBtn');
