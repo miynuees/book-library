@@ -314,12 +314,10 @@
     <h1 class="serif">📚 내 서재</h1>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
       <div class="code-pill">코드: <b id="codeLabel"></b> · <button id="switchCodeBtn">다른 서재</button></div>
-      <button class="link-btn" id="reclassifyBtn">🔄 기존 책 분류 새로고침</button>
       <button class="link-btn" id="exportBtn">📥 목록 내보내기</button>
       <div class="theme-picker" id="themePicker"></div>
     </div>
   </header>
-  <div id="reclassifyStatus" class="search-status" hidden></div>
   <div class="stats" id="stats"></div>
 
   <div class="panel">
@@ -647,40 +645,6 @@ async function addFromSearch(item, btn){
   await addBookRecord({ title: item.title, author: item.author, publisher: item.publisher, pubDate: item.pubDate, isbn13: item.isbn13, cover, pageCount, categoryName, nlKdc, nlSubject, nlKdcCode, nlClassNo });
   btn.textContent = '담김 ✓';
 }
-
-// ---------- 기존 책 분류 새로고침 (국립중앙도서관 API 새로 붙은 뒤 소급 재분류용) ----------
-const reclassifyBtn = document.getElementById('reclassifyBtn');
-const reclassifyStatus = document.getElementById('reclassifyStatus');
-reclassifyBtn.onclick = async () => {
-  const targets = books.filter(b => b.isbn13);
-  if (!targets.length) { alert('ISBN 정보가 있는 책이 없어요.'); return; }
-  if (!confirm(`서재에 있는 책 ${targets.length}권을 국립중앙도서관 분류로 다시 확인할게요.\n책 수에 따라 시간이 좀 걸릴 수 있어요. 계속할까요?`)) return;
-
-  reclassifyBtn.disabled = true;
-  reclassifyStatus.hidden = false;
-  let done = 0, changed = 0, failed = 0;
-  for (const b of targets) {
-    done++;
-    reclassifyStatus.textContent = `재분류 중... (${done}/${targets.length}) ${b.title}`;
-    try {
-      const r = await fetch(`${PROXY}/api/book-search?action=lookup&isbn=${encodeURIComponent(b.isbn13)}`);
-      const data = await r.json();
-      const item = data.items && data.items[0];
-      if (item) {
-        const kdc = resolveKdc(item.nlClassNo, item.nlKdcCode, item.nlKdc, item.nlSubject, b.categoryName || '');
-        const nextDetail = item.nlClassNo || '';
-        if (kdc && (kdc.code !== b.kdcCode || nextDetail !== (b.kdcDetail || ''))) {
-          await booksRef.doc(b.id).update({ kdcCode: kdc.code, kdcLabel: kdc.label, kdcDetail: nextDetail });
-          changed++;
-        }
-      }
-    } catch (e) { failed++; }
-    await new Promise(res => setTimeout(res, 150)); // API에 너무 빠르게 연달아 요청하지 않도록 살짝 텀을 둠
-  }
-  reclassifyStatus.textContent = `완료! ${targets.length}권 확인해서 ${changed}권 분류가 새로 반영됐어요.` + (failed ? ` (${failed}권은 조회 실패)` : '');
-  reclassifyBtn.disabled = false;
-  setTimeout(() => { reclassifyStatus.hidden = true; }, 8000);
-};
 
 // ---------- 목록 내보내기 (CSV — 엑셀에서 바로 열림) ----------
 document.getElementById('exportBtn').onclick = () => {
