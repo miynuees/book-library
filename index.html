@@ -231,6 +231,28 @@
   .modal-actions .btn{flex:1;}
   .modal-close{position:sticky;top:0;text-align:right;margin-bottom:-6px;}
   .modal-close button{background:none;color:var(--muted);font-size:22px;padding:4px 8px;}
+
+  /* ---------- 통계 모달 ---------- */
+  .stat-link{cursor:pointer;}
+  .stat-link:hover b{text-decoration:underline;}
+  .stats-hero{display:flex;gap:10px;margin:14px 0 18px;}
+  .stats-hero .hero{flex:1;background:var(--cream);border-radius:14px;padding:12px 8px;text-align:center;}
+  .stats-hero .hero b{font-size:20px;display:block;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .stats-hero .hero span{font-size:11px;color:var(--muted);}
+  .stats-sub{font-size:13px;font-weight:700;color:var(--ink);margin:16px 0 6px;}
+  .status-bar{display:flex;gap:2px;height:16px;border-radius:8px;overflow:hidden;margin:6px 0 8px;}
+  .status-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink);}
+  .status-legend .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:-1px;}
+  .kdc-row{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:13px;}
+  .kdc-row .name{width:92px;flex-shrink:0;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .kdc-row .bar-wrap{flex:1;background:var(--cream);border-radius:6px;height:13px;}
+  .kdc-row .bar{height:100%;border-radius:6px;background:var(--lilac-dark);min-width:4px;}
+  .kdc-row .n{width:44px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0;}
+
+  /* ---------- 중복/연속스캔 ---------- */
+  .owned-badge{display:inline-block;background:var(--cream);color:var(--peach-dark);font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:4px;}
+  .scan-multi{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-top:10px;cursor:pointer;user-select:none;}
+  .scan-multi input{accent-color:var(--lilac-dark);}
   .del-link{display:block;text-align:center;margin-top:14px;font-size:12px;color:#C97A7A;text-decoration:underline;background:none;}
 
   /* ---------- 바코드 스캐너 ---------- */
@@ -293,6 +315,7 @@
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
       <div class="code-pill">코드: <b id="codeLabel"></b> · <button id="switchCodeBtn">다른 서재</button></div>
       <button class="link-btn" id="reclassifyBtn">🔄 기존 책 분류 새로고침</button>
+      <button class="link-btn" id="exportBtn">📥 목록 내보내기</button>
       <div class="theme-picker" id="themePicker"></div>
     </div>
   </header>
@@ -338,9 +361,12 @@
     <h3 class="serif" style="margin:0 0 4px;">📷 바코드로 추가</h3>
     <div id="qr-reader"></div>
     <div id="scannerStatus" class="scanner-hint">책 뒷면 바코드를 카메라에 비춰주세요.</div>
+    <label class="scan-multi"><input type="checkbox" id="multiScanChk"> 연속 스캔 — 여러 권 연달아 담기</label>
     <button class="btn btn-outline" id="scannerRetryBtn" hidden style="width:100%;margin-top:10px;">🔄 다시 스캔</button>
   </div>
 </div>
+
+<div class="overlay" id="statsOverlay" hidden></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
@@ -555,16 +581,19 @@ async function doSearch(){
     }
     searchStatus.hidden = true;
     closeResultsBtn.hidden = false;
-    searchResults.innerHTML = data.items.map((it, i) => `
+    searchResults.innerHTML = data.items.map((it, i) => {
+      const owned = it.isbn13 && books.some(b => b.isbn13 === it.isbn13);
+      return `
       <div class="result-card">
         <img src="${esc(it.cover)}" onerror="this.style.visibility='hidden'">
         <div class="result-info">
           <div class="t">${esc(it.title)}</div>
           <div class="m">${esc(it.author)} · ${esc(it.publisher)} ${it.pubDate ? '· ' + esc(it.pubDate.slice(0,4)) : ''}</div>
+          ${owned ? '<span class="owned-badge">📚 이미 서재에 있어요</span>' : ''}
         </div>
         <button class="btn btn-lilac" style="padding:8px 12px;font-size:12px;" data-i="${i}">담기</button>
       </div>
-    `).join('');
+    `;}).join('');
     searchResults.querySelectorAll('button[data-i]').forEach(btn => {
       btn.onclick = () => addFromSearch(data.items[+btn.dataset.i], btn);
     });
@@ -591,6 +620,9 @@ async function addBookRecord(b){
 }
 
 async function addFromSearch(item, btn){
+  if (item.isbn13 && books.some(b => b.isbn13 === item.isbn13)) {
+    if (!confirm(`"${item.title}"은(는) 이미 서재에 있는 책이에요.\n같은 책을 한 권 더 담을까요?`)) return;
+  }
   btn.disabled = true;
   btn.textContent = '담는 중';
   let pageCount = item.pageCount || null;
@@ -650,6 +682,84 @@ reclassifyBtn.onclick = async () => {
   setTimeout(() => { reclassifyStatus.hidden = true; }, 8000);
 };
 
+// ---------- 목록 내보내기 (CSV — 엑셀에서 바로 열림) ----------
+document.getElementById('exportBtn').onclick = () => {
+  if (!books.length) { alert('아직 내보낼 책이 없어요.'); return; }
+  const statusLabel = { unread: '안읽음', reading: '읽는 중', done: '다읽음' };
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['제목','저자','출판사','출간일','ISBN','쪽수','분류','상세분류','상태','현재쪽','별점','메모','추가일'];
+  const rows = books.map(b => [
+    b.title, b.author, b.publisher, b.pubDate, b.isbn13, b.pageCount ?? '',
+    b.kdcLabel ? `${b.kdcCode} ${b.kdcLabel}` : '', b.kdcDetail || '',
+    statusLabel[b.status] || b.status, b.currentPage ?? '', b.rating ?? '', b.memo ?? '',
+    (b.addedAt && b.addedAt.toDate) ? b.addedAt.toDate().toISOString().slice(0,10) : ''
+  ].map(q).join(','));
+  // 맨 앞의 BOM이 없으면 엑셀이 한글을 깨뜨림
+  const csv = '﻿' + head.map(q).join(',') + '\r\n' + rows.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `내서재_${libraryCode}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+// ---------- 서재 통계 ----------
+const statsOverlay = document.getElementById('statsOverlay');
+const STATUS_META = [
+  { key: 'unread', label: '안읽음', color: '#8E63D2' },
+  { key: 'reading', label: '읽는 중', color: '#D97B2F' },
+  { key: 'done', label: '다읽음', color: '#4A7DB5' },
+];
+function openStats(){
+  if (!books.length) { alert('아직 담긴 책이 없어요.'); return; }
+  const total = books.length;
+  const counts = { unread: 0, reading: 0, done: 0 };
+  let pagesTotal = 0;
+  books.forEach(b => {
+    if (counts[b.status] !== undefined) counts[b.status]++;
+    if (b.pageCount) pagesTotal += b.pageCount;
+  });
+  const groups = KDC_CLASSES
+    .map(c => ({ label: `${c.code} ${c.label}`, n: books.filter(b => b.kdcCode === c.code).length }))
+    .filter(g => g.n);
+  const noneN = books.filter(b => !b.kdcCode).length;
+  if (noneN) groups.push({ label: '미분류', n: noneN });
+  groups.sort((a, b) => b.n - a.n);
+  const maxN = Math.max(...groups.map(g => g.n));
+  const topGroup = groups[0];
+
+  statsOverlay.innerHTML = `
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-close"><button id="statsCloseBtn">✕</button></div>
+    <h3 class="serif" style="margin:0;">📊 서재 통계</h3>
+    <div class="stats-hero">
+      <div class="hero"><b>${total}</b><span>전체 권수</span></div>
+      <div class="hero"><b>${pagesTotal.toLocaleString()}</b><span>쪽수 합계</span></div>
+      <div class="hero"><b>${total ? Math.round(counts.done / total * 100) : 0}%</b><span>다읽은 비율</span></div>
+    </div>
+    <div class="stats-sub">읽음 상태</div>
+    <div class="status-bar">
+      ${STATUS_META.filter(s => counts[s.key]).map(s =>
+        `<div style="flex:${counts[s.key]};background:${s.color};" title="${s.label} ${counts[s.key]}권"></div>`).join('')}
+    </div>
+    <div class="status-legend">
+      ${STATUS_META.map(s => `<span><span class="dot" style="background:${s.color};"></span>${s.label} ${counts[s.key]}권</span>`).join('')}
+    </div>
+    <div class="stats-sub">분류별</div>
+    ${groups.map(g => `
+      <div class="kdc-row" title="${esc(g.label)} ${g.n}권">
+        <span class="name">${esc(g.label)}</span>
+        <span class="bar-wrap"><span class="bar" style="width:${Math.round(g.n / maxN * 100)}%;display:block;"></span></span>
+        <span class="n">${g.n}권</span>
+      </div>`).join('')}
+    ${topGroup && topGroup.label !== '미분류' ? `<p style="font-size:12.5px;color:var(--muted);margin:14px 0 0;">이 서재에서 가장 많은 분류는 <b style="color:var(--lilac-dark);">${esc(topGroup.label)}</b> (${Math.round(topGroup.n / total * 100)}%)이에요.</p>` : ''}
+  </div>`;
+  statsOverlay.hidden = false;
+  document.getElementById('statsCloseBtn').onclick = () => { statsOverlay.hidden = true; };
+}
+statsOverlay.addEventListener('click', e => { if (e.target === statsOverlay) statsOverlay.hidden = true; });
+
 // ---------- 바코드 스캔으로 추가 ----------
 const scannerOverlay = document.getElementById('scannerOverlay');
 const scannerStatus = document.getElementById('scannerStatus');
@@ -689,7 +799,20 @@ async function startCamera(){
   }
 }
 
+const multiScanChk = document.getElementById('multiScanChk');
+let scanSessionCount = 0;
+
+// 연속 스캔이 켜져 있으면 잠깐 결과를 보여준 뒤 자동으로 카메라 재시작, 아니면 다시 스캔 버튼만.
+function scanAgainOrWait(delay){
+  if (multiScanChk.checked) {
+    setTimeout(() => { if (!scannerOverlay.hidden && !html5QrCode) startCamera(); }, delay);
+  } else {
+    showRetryButton();
+  }
+}
+
 function openScanner(){
+  scanSessionCount = 0;
   scannerOverlay.hidden = false;
   startCamera();
 }
@@ -706,23 +829,35 @@ scannerOverlay.addEventListener('click', e => { if (e.target === scannerOverlay)
 scannerRetryBtn.onclick = () => startCamera();
 
 async function handleScannedIsbn(isbn){
+  const dup = books.find(b => b.isbn13 === isbn);
+  if (dup) {
+    scannerStatus.textContent = `⚠️ "${dup.title}" — 이미 서재에 있는 책이라 건너뛰었어요.`;
+    scanAgainOrWait(1600);
+    return;
+  }
   scannerStatus.textContent = `바코드 인식: ${isbn} — 책 정보를 불러오는 중...`;
   try {
     const r = await fetch(`${PROXY}/api/book-search?action=lookup&isbn=${encodeURIComponent(isbn)}`);
     const data = await r.json();
     if (!r.ok || !data.items || !data.items[0]) {
       scannerStatus.textContent = '이 바코드로 책 정보를 찾지 못했어요.';
-      showRetryButton();
+      scanAgainOrWait(1600);
       return;
     }
     const item = data.items[0];
     showProviderNote(data.provider);
     await addBookRecord(item);
-    scannerStatus.textContent = `✅ "${item.title}" 서재에 담았어요!`;
-    setTimeout(closeScanner, 1200);
+    scanSessionCount++;
+    if (multiScanChk.checked) {
+      scannerStatus.textContent = `✅ "${item.title}" 담았어요! (이번에 ${scanSessionCount}권) — 다음 책 바코드를 비춰주세요.`;
+      scanAgainOrWait(1400);
+    } else {
+      scannerStatus.textContent = `✅ "${item.title}" 서재에 담았어요!`;
+      setTimeout(closeScanner, 1200);
+    }
   } catch (err) {
     scannerStatus.textContent = '책 정보를 불러오는 중 오류가 났어요.';
-    showRetryButton();
+    scanAgainOrWait(1600);
   }
 }
 
@@ -761,7 +896,9 @@ function render(){
     <div class="stat"><b>${counts.all}</b><span>전체</span></div>
     <div class="stat"><b>${counts.done}</b><span>다읽음</span></div>
     <div class="stat"><b>${counts.reading}</b><span>읽는 중</span></div>
+    <div class="stat stat-link" id="statsOpenBtn"><b>📊</b><span>통계 보기</span></div>
   `;
+  document.getElementById('statsOpenBtn').onclick = openStats;
 
   document.getElementById('tabs').innerHTML = TABS.map(t => `
     <button class="tab ${activeTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label} ${counts[t.key]}</button>
