@@ -314,7 +314,6 @@
     <h1 class="serif">📚 내 서재</h1>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
       <div class="code-pill">코드: <b id="codeLabel"></b> · <button id="switchCodeBtn">다른 서재</button></div>
-      <button class="link-btn" id="exportBtn">📥 목록 내보내기</button>
       <div class="theme-picker" id="themePicker"></div>
     </div>
   </header>
@@ -646,8 +645,8 @@ async function addFromSearch(item, btn){
   btn.textContent = '담김 ✓';
 }
 
-// ---------- 목록 내보내기 (CSV — 엑셀에서 바로 열림) ----------
-document.getElementById('exportBtn').onclick = () => {
+// ---------- 데이터 저장 (CSV — 엑셀에서 바로 열림) ----------
+function exportCsv(){
   if (!books.length) { alert('아직 내보낼 책이 없어요.'); return; }
   const statusLabel = { unread: '안읽음', reading: '읽는 중', done: '다읽음' };
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -861,8 +860,10 @@ function render(){
     <div class="stat"><b>${counts.done}</b><span>다읽음</span></div>
     <div class="stat"><b>${counts.reading}</b><span>읽는 중</span></div>
     <div class="stat stat-link" id="statsOpenBtn"><b>📊</b><span>통계 보기</span></div>
+    <div class="stat stat-link" id="exportBtn" style="margin-left:auto;"><b>💾</b><span>데이터 저장</span></div>
   `;
   document.getElementById('statsOpenBtn').onclick = openStats;
+  document.getElementById('exportBtn').onclick = exportCsv;
 
   document.getElementById('tabs').innerHTML = TABS.map(t => `
     <button class="tab ${activeTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label} ${counts[t.key]}</button>
