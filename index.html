@@ -385,8 +385,13 @@
     </div>
     <div class="settings-group">
       <div class="settings-label">데이터</div>
-      <button class="btn btn-lilac" id="exportBtn" style="width:100%;">💾 데이터 저장</button>
-      <div class="settings-hint">전체 책 목록을 엑셀에서 열 수 있는 파일로 내려받아요. 가끔 눌러서 백업해두면 든든해요.</div>
+      <div class="settings-row">
+        <button class="btn btn-lilac" id="exportBtn" style="flex:1;">💾 데이터 저장</button>
+        <button class="btn btn-outline" id="importBtn" style="flex:1;">📂 불러오기</button>
+      </div>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+      <div class="settings-hint">'데이터 저장'을 누르면 전체 책이 백업 파일로 내려받아지고, '불러오기'로 그 파일을 골라 그대로 복원할 수 있어요.</div>
+      <button class="link-btn" id="exportCsvBtn" style="margin-top:6px;">📊 엑셀에서 보는 표(CSV)로 저장하기</button>
     </div>
   </div>
 </div>
@@ -719,8 +724,63 @@ async function addFromSearch(item, btn){
   btn.textContent = '담김 ✓';
 }
 
-// ---------- 데이터 저장 (CSV — 엑셀에서 바로 열림) ----------
-document.getElementById('exportBtn').onclick = () => exportCsv();
+// ---------- 데이터 백업/복원 (JSON — 표지·분류까지 전부 담겨서 그대로 복원 가능) ----------
+function tsToIso(v){ return (v && v.toDate) ? v.toDate().toISOString() : null; }
+function isoToTs(v){ return v ? firebase.firestore.Timestamp.fromDate(new Date(v)) : null; }
+
+function downloadFile(name, content, type){
+  const blob = new Blob([content], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+document.getElementById('exportBtn').onclick = () => {
+  if (!books.length) { alert('아직 저장할 책이 없어요.'); return; }
+  const data = {
+    app: 'seni-book-library', version: 1,
+    savedAt: new Date().toISOString(),
+    libraryCode,
+    books: books.map(b => ({ ...b, addedAt: tsToIso(b.addedAt), updatedAt: tsToIso(b.updatedAt), finishedAt: tsToIso(b.finishedAt) })),
+  };
+  downloadFile(`내서재_백업_${libraryCode}_${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(data, null, 2), 'application/json');
+};
+
+const importFileInput = document.getElementById('importFile');
+document.getElementById('importBtn').onclick = () => importFileInput.click();
+importFileInput.onchange = async () => {
+  const file = importFileInput.files[0];
+  importFileInput.value = '';
+  if (!file) return;
+  let data;
+  try { data = JSON.parse(await file.text()); } catch { alert('백업 파일을 읽지 못했어요. 파일이 손상됐거나 다른 파일 같아요.'); return; }
+  if (!data || data.app !== 'seni-book-library' || !Array.isArray(data.books)) { alert('이 앱에서 저장한 백업 파일이 아니에요.'); return; }
+  if (!data.books.length) { alert('백업 파일에 책이 없어요.'); return; }
+  const when = data.savedAt ? `${data.savedAt.slice(0,10)}에 저장한 ` : '';
+  if (!confirm(`${when}백업에서 책 ${data.books.length}권을 불러올까요?\n같은 책은 백업 내용으로 되돌아가고, 백업에 없는 책은 그대로 남아요.`)) return;
+  try {
+    for (let i = 0; i < data.books.length; i += 400) {
+      const batch = db.batch();
+      data.books.slice(i, i + 400).forEach(b => {
+        const { id, ...fields } = b;
+        fields.addedAt = isoToTs(fields.addedAt) || firebase.firestore.FieldValue.serverTimestamp();
+        fields.updatedAt = isoToTs(fields.updatedAt) || firebase.firestore.FieldValue.serverTimestamp();
+        fields.finishedAt = isoToTs(fields.finishedAt);
+        batch.set(id ? booksRef.doc(id) : booksRef.doc(), fields);
+      });
+      await batch.commit();
+    }
+    alert(`불러오기 완료! ${data.books.length}권이 서재에 반영됐어요.`);
+  } catch (err) {
+    alert('불러오는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.');
+    console.error(err);
+  }
+};
+
+// ---------- 엑셀용 내보내기 (CSV — 사람이 보기 좋은 표, 복원용은 아님) ----------
+document.getElementById('exportCsvBtn').onclick = () => exportCsv();
 function exportCsv(){
   if (!books.length) { alert('아직 내보낼 책이 없어요.'); return; }
   const statusLabel = { unread: '안읽음', reading: '읽는 중', done: '다읽음' };
