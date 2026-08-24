@@ -78,7 +78,17 @@
   #app{max-width:960px;margin:0 auto;padding:24px 18px 80px;}
   header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
   header.top h1{font-size:28px;margin:0;display:flex;align-items:center;gap:8px;}
-  header.top h1 .link-btn{align-self:flex-end;margin-bottom:5px;white-space:nowrap;}
+  .icon-btn{background:#fff;border-radius:50%;width:40px;height:40px;font-size:19px;box-shadow:var(--shadow);flex-shrink:0;transition:transform .15s;}
+  .icon-btn:hover{transform:rotate(30deg);}
+
+  .settings-group{margin-bottom:20px;}
+  .settings-group:last-child{margin-bottom:4px;}
+  .settings-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;}
+  .settings-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .settings-name{font-size:16px;font-weight:700;color:var(--ink);margin-right:auto;}
+  .settings-row .btn{padding:9px 14px;font-size:13px;}
+  .settings-hint{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6;}
+  #settingsOverlay .theme-swatch{width:24px;height:24px;}
 
   .theme-picker{display:flex;gap:5px;align-items:center;}
   .theme-swatch{width:14px;height:14px;border-radius:50%;padding:0;border:1.5px solid #fff;box-shadow:0 0 0 1px var(--line);transition:transform .15s;}
@@ -306,10 +316,8 @@
 
 <div id="app" hidden>
   <header class="top">
-    <h1 class="serif">📚 <span id="libTitle">내 서재</span> <button class="link-btn" id="renameCodeBtn">이름 바꾸기</button> <button class="link-btn" id="switchCodeBtn">다른 서재</button></h1>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-      <div class="theme-picker" id="themePicker"></div>
-    </div>
+    <h1 class="serif">📚 <span id="libTitle">내 서재</span></h1>
+    <button class="icon-btn" id="settingsBtn" title="설정">⚙️</button>
   </header>
   <div class="stats" id="stats"></div>
 
@@ -358,6 +366,30 @@
 </div>
 
 <div class="overlay" id="statsOverlay" hidden></div>
+
+<div class="overlay" id="settingsOverlay" hidden>
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-close"><button id="settingsCloseBtn">✕</button></div>
+    <h3 class="serif" style="margin:0 0 18px;">⚙️ 설정</h3>
+    <div class="settings-group">
+      <div class="settings-label">서재 이름</div>
+      <div class="settings-row">
+        <span class="settings-name" id="settingsCodeLabel"></span>
+        <button class="btn btn-outline" id="renameCodeBtn">이름 바꾸기</button>
+        <button class="btn btn-ghost" id="switchCodeBtn">다른 서재</button>
+      </div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">테마</div>
+      <div class="theme-picker" id="themePicker"></div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">데이터</div>
+      <button class="btn btn-lilac" id="exportBtn" style="width:100%;">💾 데이터 저장</button>
+      <div class="settings-hint">전체 책 목록을 엑셀에서 열 수 있는 파일로 내려받아요. 가끔 눌러서 백업해두면 든든해요.</div>
+    </div>
+  </div>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
@@ -503,10 +535,17 @@ document.getElementById('switchCodeBtn').onclick = () => {
   libraryCode = '';
   books = [];
   document.title = '내 서재';
+  settingsOverlay.hidden = true;
   document.getElementById('app').hidden = true;
   document.getElementById('gate').hidden = false;
   document.getElementById('codeInput').value = '';
 };
+
+// ---------- 설정 모달 ----------
+const settingsOverlay = document.getElementById('settingsOverlay');
+document.getElementById('settingsBtn').onclick = () => { settingsOverlay.hidden = false; };
+document.getElementById('settingsCloseBtn').onclick = () => { settingsOverlay.hidden = true; };
+settingsOverlay.addEventListener('click', e => { if (e.target === settingsOverlay) settingsOverlay.hidden = true; });
 
 // 서재 이름(코드) 바꾸기 — 코드가 곧 저장 위치라서, 책 전체를 새 이름 아래로 복사한 뒤 원래 것을 지우는 방식.
 document.getElementById('renameCodeBtn').onclick = async () => {
@@ -552,6 +591,7 @@ function openLibrary(){
   document.getElementById('gate').hidden = true;
   document.getElementById('app').hidden = false;
   document.getElementById('libTitle').textContent = `${libraryCode}의 서재`;
+  document.getElementById('settingsCodeLabel').textContent = libraryCode;
   document.title = `${libraryCode}의 서재`;
   renderThemePicker();
   renderViewToggle();
@@ -680,6 +720,7 @@ async function addFromSearch(item, btn){
 }
 
 // ---------- 데이터 저장 (CSV — 엑셀에서 바로 열림) ----------
+document.getElementById('exportBtn').onclick = () => exportCsv();
 function exportCsv(){
   if (!books.length) { alert('아직 내보낼 책이 없어요.'); return; }
   const statusLabel = { unread: '안읽음', reading: '읽는 중', done: '다읽음' };
@@ -894,10 +935,8 @@ function render(){
     <div class="stat"><b>${counts.done}</b><span>다읽음</span></div>
     <div class="stat"><b>${counts.reading}</b><span>읽는 중</span></div>
     <div class="stat stat-link" id="statsOpenBtn"><b>📊</b><span>통계 보기</span></div>
-    <div class="stat stat-link" id="exportBtn" style="margin-left:auto;"><b>💾</b><span>데이터 저장</span></div>
   `;
   document.getElementById('statsOpenBtn').onclick = openStats;
-  document.getElementById('exportBtn').onclick = exportCsv;
 
   document.getElementById('tabs').innerHTML = TABS.map(t => `
     <button class="tab ${activeTab === t.key ? 'active' : ''}" data-tab="${t.key}">${t.label} ${counts[t.key]}</button>
