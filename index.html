@@ -306,7 +306,7 @@
 
 <div id="app" hidden>
   <header class="top">
-    <h1 class="serif">📚 <span id="libTitle">내 서재</span> <button class="link-btn" id="switchCodeBtn">다른 서재</button></h1>
+    <h1 class="serif">📚 <span id="libTitle">내 서재</span> <button class="link-btn" id="renameCodeBtn">이름 바꾸기</button> <button class="link-btn" id="switchCodeBtn">다른 서재</button></h1>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
       <div class="theme-picker" id="themePicker"></div>
     </div>
@@ -506,6 +506,44 @@ document.getElementById('switchCodeBtn').onclick = () => {
   document.getElementById('app').hidden = true;
   document.getElementById('gate').hidden = false;
   document.getElementById('codeInput').value = '';
+};
+
+// 서재 이름(코드) 바꾸기 — 코드가 곧 저장 위치라서, 책 전체를 새 이름 아래로 복사한 뒤 원래 것을 지우는 방식.
+document.getElementById('renameCodeBtn').onclick = async () => {
+  const newCode = (prompt(`새 서재 이름을 입력해주세요.\n(지금 이름: ${libraryCode})`) || '').trim();
+  if (!newCode || newCode === libraryCode) return;
+  if (newCode.includes('/') || newCode === '.' || newCode === '..') { alert('이 이름은 쓸 수 없어요. 다른 이름으로 해주세요.'); return; }
+  const renameBtn = document.getElementById('renameCodeBtn');
+  renameBtn.disabled = true;
+  try {
+    const targetRef = db.collection('book_library').doc(newCode).collection('books');
+    const exists = await targetRef.limit(1).get();
+    if (!exists.empty) { alert(`"${newCode}"은(는) 이미 다른 서재가 쓰고 있는 이름이에요.`); return; }
+    if (!confirm(`서재 이름을 "${libraryCode}" → "${newCode}"(으)로 바꿀까요?\n담긴 책이 모두 새 이름으로 옮겨져요.`)) return;
+    const snap = await booksRef.get();
+    const docs = snap.docs;
+    // Firestore batch는 한 번에 500개까지라 넉넉히 400개씩 끊어서 처리
+    for (let i = 0; i < docs.length; i += 400) {
+      const batch = db.batch();
+      docs.slice(i, i + 400).forEach(d => batch.set(targetRef.doc(d.id), d.data()));
+      await batch.commit();
+    }
+    for (let i = 0; i < docs.length; i += 400) {
+      const batch = db.batch();
+      docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    if (unsub) unsub();
+    libraryCode = newCode;
+    localStorage.setItem('seni_library_code', newCode);
+    openLibrary();
+    alert(`이사 완료! 이제 "${newCode}의 서재"예요.\n다른 기기에서도 새 이름으로 들어가면 돼요.`);
+  } catch (err) {
+    alert('이름을 바꾸는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.');
+    console.error(err);
+  } finally {
+    renameBtn.disabled = false;
+  }
 };
 
 if (libraryCode) openLibrary();
